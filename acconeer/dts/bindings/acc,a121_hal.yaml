@@ -1,0 +1,54 @@
+# Copyright (c) 2022 Acconeer AB
+# SPDX-License-Identifier: BSD-3-Clause
+
+description: Acconeer A121 pulse coherent radar
+
+compatible: "acc,a121_hal"
+
+
+properties:
+    acc-sensor-interrupt-gpios:
+      type: phandle-array
+      required: true
+      description: IRQ lines of A121 sensors.
+
+    acc-sensor-enable-gpios:
+      type: phandle-array
+      required: true
+      description: Enable lines of A121 sensors.
+
+    acc-power-enable-gpios:
+      type: phandle-array
+      required: false
+      description: Power switch or PMU enable
+
+    acc-sensor-select-gpios:
+      type: phandle-array
+      required: false
+      description: XE121 style sensor selection
+
+    acc-sensor-stab-time-us:
+      type: int
+      required: true
+      description: Sensor crystal stabilization time
+
+    acc-ps-enable-time:
+      type: int
+      required: false
+      description: Power switch enable stabilization time
+
+    acc-spi-freq:
+      type: int
+      required: false
+      description: Max SPI frequency supported by board
+
+    acc-max-spi-transfer-size:
+      type: int
+      required: true
+      description: Max length of a SPI transfer to sensor
+
+    acc-interrupt-polling-delay-us:
+      type: int
+      required: false
+      description: Define this if you would like to use polling to detect value change on the interrupt pin. Suggested value 10 (ms).
+

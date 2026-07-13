@@ -1,0 +1,5 @@
+board:
+  name: xm126
+  vendor: acconeer
+  socs:
+    - name: nrf52840

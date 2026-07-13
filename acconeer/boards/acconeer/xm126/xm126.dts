@@ -1,0 +1,273 @@
+/*
+ * Copyright (c) 2022 Acconeer AB
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/dts-v1/;
+#include <nordic/nrf52840_qiaa.dtsi>
+
+/ {
+	model = "Acconeer XM126";
+	compatible = "acc,xm126";
+
+	chosen {
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+		zephyr,uart-mcumgr = &uart0;
+		zephyr,bt-mon-uart = &uart0;
+		zephyr,bt-c2h-uart = &uart0;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,code-partition = &slot0_partition;
+		zephyr,ieee802154 = &ieee802154;
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+		button0: button_0 {
+			gpios = <&gpio0 25 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "DFU push button";
+		};
+	};
+
+	/* These aliases are provided for compatibility with samples */
+	aliases {
+		mcuboot-button0 = &button0;
+	};
+
+	spim3_tx_reserved: memory@20000000 {
+		compatible = "zephyr,memory-region";
+		reg = <0x20000000 0x2000>;
+		zephyr,memory-region = "spim3_tx_buffer";
+	};
+
+	sram@2003FC00 {
+		compatible = "zephyr,memory-region", "mmio-sram";
+		reg = <0x2003FC00 DT_SIZE_K(1)>;
+		zephyr,memory-region = "RetainedMem";
+		status = "okay";
+
+		retainedmem {
+			compatible = "zephyr,retained-ram";
+			status = "okay";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			/* This creates a 256-byte partition */
+			retention0: retention@0 {
+				compatible = "zephyr,retention";
+				status = "okay";
+
+				/* The total size of this area is 256
+				 * bytes which includes the prefix and
+				 * checksum, this means that the usable
+				 * data storage area is 256 - 3 = 253
+				 * bytes
+				 */
+				reg = <0x0 0x100>;
+
+				/* This is the prefix which must appear
+				 * at the front of the data
+				 */
+				prefix = [08 04];
+
+				/* This uses a 1-byte checksum */
+				checksum = <1>;
+			};
+		};
+	};
+
+	chosen {
+		zephyr,boot-mode = &retention0;
+	};
+};
+
+&pinctrl {
+	uart0_default: uart0_default {
+		group1 {
+			psels = <NRF_PSEL(UART_TX, 0, 16)>,
+				<NRF_PSEL(UART_RTS, 0, 20)>;
+		};
+		group2 {
+			psels = <NRF_PSEL(UART_RX, 0, 6)>,
+				<NRF_PSEL(UART_CTS, 0, 19)>;
+			bias-pull-up;
+		};
+	};
+	uart0_sleep: uart0_sleep {
+		group1 {
+			psels = <NRF_PSEL(UART_TX, 0, 16)>,
+				<NRF_PSEL(UART_RTS, 0, 20)>;
+		};
+		group2 {
+			psels = <NRF_PSEL(UART_RX, 0, 6)>,
+				<NRF_PSEL(UART_CTS, 0, 19)>;
+			bias-pull-up;
+		};
+	};
+	i2c1_default: i2c1_default {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SDA, 0, 21)>,
+				<NRF_PSEL(TWIM_SCL, 0, 23)>;
+		};
+	};
+	spi3_default_alt: spi3_default_alt {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 0, 27)>,
+				<NRF_PSEL(SPIM_MOSI, 0, 40)>,
+				<NRF_PSEL(SPIM_MISO, 0, 5)>;
+		};
+	};
+	spi3_sleep_alt: spi3_sleep_alt {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 0, 27)>,
+				<NRF_PSEL(SPIM_MOSI, 0, 40)>,
+				<NRF_PSEL(SPIM_MISO, 0, 5)>;
+			low-power-enable;
+		};
+	};
+};
+
+&adc {
+	status = "okay";
+};
+
+&uicr {
+	gpio-as-nreset;
+};
+
+&gpiote {
+	status = "okay";
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&gpio1 {
+	status = "okay";
+};
+
+&uart0 {
+	compatible = "nordic,nrf-uarte";
+	status = "okay";
+	current-speed = <115200>;
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-1 = <&uart0_sleep>;
+	pinctrl-names = "default", "sleep";
+};
+
+&i2c1 {
+	compatible = "nordic,nrf-twi";
+	status = "okay";
+	pinctrl-0 = <&i2c1_default>;
+	pinctrl-names = "default";
+};
+
+/ {
+	acc_rss_hal {
+		compatible = "acc,a121_hal";
+
+		acc-sensor-interrupt-gpios = <&gpio0 8 GPIO_ACTIVE_HIGH>;
+		acc-sensor-enable-gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+
+		acc-spi-freq = <32000000>;
+		acc-sensor-stab-time-us = <2000>;
+		acc-max-spi-transfer-size = <4096>;
+	};
+};
+
+&spi3 {
+	compatible = "nordic,nrf-spim";
+	status = "okay";
+	pinctrl-0 = <&spi3_default_alt>;
+	pinctrl-1 = <&spi3_sleep_alt>;
+	pinctrl-names = "default", "sleep";
+	acc_a121_device: a121@0 {
+		compatible = "acc,a121";
+		reg = <0x0>;
+
+		spi-max-frequency = <32000000>;
+		status = "okay";
+	};
+};
+
+&ieee802154 {
+	status = "okay";
+};
+
+&flash0 {
+
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 0x0000C000>;
+		};
+		slot0_partition: partition@c000 {
+			label = "image-0";
+			reg = <0x0000C000 0x00067000>;
+		};
+		slot1_partition: partition@73000 {
+			label = "image-1";
+			reg = <0x00073000 0x00067000>;
+		};
+		scratch_partition: partition@da000 {
+			label = "image-scratch";
+			reg = <0x000da000 0x0001e000>;
+		};
+
+		/*
+		 * The flash starting at 0x000f8000 and ending at
+		 * 0x000fffff is reserved for use by the application.
+		 */
+
+		/*
+		 * Storage partition will be used by FCB/LittleFS/NVS
+		 * if enabled.
+		 */
+		storage_partition: partition@f8000 {
+			label = "storage";
+			reg = <0x000f8000 0x00008000>;
+		};
+	};
+};
+
+/* Reduce SRAM0 usage by 9KB to account for non-init area and reserved spim3_tx_buffer */
+&sram0 {
+	reg = <0x20002000 DT_SIZE_K(247)>;
+};
+
+/ {
+	vbatt {
+	   compatible = "voltage-divider";
+	   status = "disabled";
+	   io-channels = <&adc 0>;
+	   output-ohms = <180000>;
+	   full-ohms = <(360000 + 180000)>;
+	   power-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+	};
+ };
+
+&adc {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	channel@0 {
+		reg = <0>;
+		zephyr,gain = "ADC_GAIN_1_3";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 15)>;
+		zephyr,input-positive = <NRF_SAADC_AIN0>;
+		zephyr,resolution = <10>;
+	};
+};
+
+/* configure REG1 in DC/DC mode */
+&reg1 {
+    regulator-initial-mode = <NRF5X_REG_MODE_DCDC>;
+};

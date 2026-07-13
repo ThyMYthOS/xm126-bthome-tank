@@ -1,0 +1,28 @@
+/*
+ * Copyright (c) 2022 Acconeer AB
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/ {
+	leds {
+		compatible = "gpio-leds";
+		led1: led_1 {
+			gpios = <&gpio0 4 GPIO_ACTIVE_LOW>;
+			label = "XB122 LED";
+		};
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+		button0: button_0 {
+			gpios = <&gpio0 25 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "DFU push button";
+		};
+	};
+
+	aliases {
+		led1 = &led1;
+		button0 = &button0;
+    };
+};

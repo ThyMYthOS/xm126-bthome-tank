@@ -1,0 +1,10 @@
+# Acconeer XM126 board configuration
+
+# Copyright (c) 2023 Acconeer AB
+# SPDX-License-Identifier: BSD-3-Clause
+
+if BOARD_XM126
+
+# Intentionally empty
+
+endif # BOARD_XM126

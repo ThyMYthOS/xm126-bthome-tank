@@ -1,0 +1,10 @@
+# Copyright (c) 2022 Acconeer AB
+# SPDX-License-Identifier: BSD-3-Clause
+
+description: Acconeer A121 pulse coherent radar
+
+compatible: "acc,a121"
+
+include: spi-device.yaml
+
+
