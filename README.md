@@ -234,6 +234,37 @@ mcumgr --conntype ble --connstring peer_name='XM126 Tank' reset
 or with nRF Connect for Mobile's Device Manager, scanning for "XM126 Tank" during the
 window.
 
+### Home Assistant BLE DFU updater integration
+
+Tagged releases (`vX.Y.Z`, pushed via `git tag` + `git push --tags`) are built and
+published by `.github/workflows/release.yml`, which attaches a `manifest.json` to the
+GitHub release in the format a Home Assistant BLE DFU updater expects:
+
+```json
+{
+  "version": "1.3.0",
+  "url": "https://github.com/<owner>/<repo>/releases/download/v1.3.0/xm126_bthome_tank-1.3.0.signed.bin",
+  "release_summary": "Fixes battery percentage reporting",
+  "release_url": "https://github.com/<owner>/<repo>/releases/tag/v1.3.0"
+}
+```
+
+`release_summary` comes from the annotated tag's message (or `Release <version>` if the
+tag has none) -- write a meaningful `git tag -a v1.3.0 -m '...'` message, since that's
+what shows up as the update description in Home Assistant. `url` points at the
+`.signed.bin` asset -- the same file used for `mcumgr image upload` above.
+
+Point the updater's manifest URL at:
+
+```
+https://github.com/<owner>/<repo>/releases/latest/download/manifest.json
+```
+
+GitHub resolves that fixed URL to whichever release is currently marked "latest", so it
+never needs updating as new versions ship. A version tag with a `-` suffix (e.g.
+`v1.3.0-rc1`) is published as a GitHub prerelease instead, so it won't be picked up by
+that URL or pushed to Home Assistant.
+
 ## Tank configuration over BLE
 
 A custom GATT service (UUID `c9c9b3ec-1cee-4f9e-b62c-9d8f6a1b6f00`) is reachable during
