@@ -222,6 +222,19 @@ build.
 the exact NCS v3.2.0 + Zephyr SDK 0.17.4 toolchain (no pre-built Docker image could be
 confirmed to correctly bundle this exact version pairing, so a from-scratch install was
 used instead of guessing at an image reference), with the NCS checkout, Zephyr SDK, and
-west venv cached keyed on the pinned versions. Bump the `NCS_VERSION`/
-`ZEPHYR_SDK_VERSION` env vars in that file (and the cache key) together if upgrading the
-toolchain, or the cache will silently serve a stale/mismatched toolchain.
+west venv cached keyed on the pinned versions. The toolchain install + `make app` steps
+live in `.github/actions/build-firmware/` (a composite action) so `build.yml` and
+`release.yml` can't drift apart -- bump `NCS_VERSION`/`ZEPHYR_SDK_VERSION` in *both*
+workflow files together if upgrading the toolchain (the cache key is derived from those
+inputs), or the cache will silently serve a stale/mismatched toolchain.
+
+`.github/workflows/release.yml` runs on `vX.Y.Z` tag pushes (or `workflow_dispatch`
+against an existing tag ref). It builds via the same composite action, then publishes a
+GitHub release for the tag with the signed app image, `dfu_application.zip`,
+`merged.hex`, and a `manifest.json` as release assets. `manifest.json` is the format a
+Home Assistant BLE DFU updater expects (`version`/`url`/`release_summary`/
+`release_url`, see the README's "Home Assistant BLE DFU updater integration" section) --
+`release_summary` is taken from the annotated tag message, so write a real message when
+tagging (`git tag -a v1.3.0 -m '...'`), not just `git tag v1.3.0`. A version with a `-`
+suffix (e.g. `1.3.0-rc1`) is published as a GitHub prerelease so it doesn't get served by
+the stable `.../releases/latest/download/manifest.json` URL.

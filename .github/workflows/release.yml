@@ -1,0 +1,122 @@
+name: Release firmware
+
+# Cuts a GitHub release for a version tag and publishes a manifest.json
+# compatible with a Home Assistant BLE DFU (mcumgr) updater:
+#
+#   { "version": ..., "url": ..., "release_summary": ..., "release_url": ... }
+#
+# Point the updater at:
+#   https://github.com/<owner>/<repo>/releases/latest/download/manifest.json
+# GitHub resolves that fixed URL to whichever release is currently "latest",
+# so it never needs updating when a new version ships.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      release_summary:
+        description: >-
+          Release summary for manifest.json / Home Assistant (defaults to the
+          tag's annotation message, then to "Release <version>"). Run this
+          from a version tag ref (vX.Y.Z) via "Use workflow from".
+        required: false
+
+env:
+  NCS_VERSION: v3.2.0
+  ZEPHYR_SDK_VERSION: 0.17.4
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out this repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need tag history for the annotation message below
+
+      - name: Determine release metadata
+        id: meta
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ "$TAG" != v*.*.* ]]; then
+            echo "::error::Run this workflow from a version tag (vX.Y.Z) -- got '$TAG'. Push a tag, or re-run workflow_dispatch with that tag selected under 'Use workflow from'."
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+
+          SUMMARY="${{ inputs.release_summary }}"
+          if [[ -z "$SUMMARY" ]]; then
+            SUMMARY="$(git tag -l --format='%(contents:subject)' "$TAG")"
+          fi
+          if [[ -z "$SUMMARY" ]]; then
+            SUMMARY="Release $VERSION"
+          fi
+
+          PRERELEASE=false
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE=true # e.g. 1.3.0-rc1 -- don't let it become "latest"
+          fi
+
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "prerelease=$PRERELEASE"
+          } >> "$GITHUB_OUTPUT"
+          # Multi-line-safe output for the release notes/manifest summary.
+          {
+            echo "summary<<EOF_SUMMARY"
+            echo "$SUMMARY"
+            echo "EOF_SUMMARY"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build firmware
+        uses: ./.github/actions/build-firmware
+        with:
+          ncs-version: ${{ env.NCS_VERSION }}
+          zephyr-sdk-version: ${{ env.ZEPHYR_SDK_VERSION }}
+
+      - name: Assemble release assets and manifest.json
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          SUMMARY: ${{ steps.meta.outputs.summary }}
+        run: |
+          mkdir -p release
+          BIN_NAME="xm126_bthome_tank-${VERSION}.signed.bin"
+          cp app/out/app/zephyr/xm126_bthome_tank.signed.bin "release/${BIN_NAME}"
+          cp app/out/dfu_application.zip "release/xm126_bthome_tank-${VERSION}-dfu_application.zip"
+          cp app/out/merged.hex "release/xm126_bthome_tank-${VERSION}-merged.hex"
+
+          jq -n \
+            --arg version "$VERSION" \
+            --arg url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${BIN_NAME}" \
+            --arg release_summary "$SUMMARY" \
+            --arg release_url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}" \
+            '{version: $version, url: $url, release_summary: $release_summary, release_url: $release_url}' \
+            > release/manifest.json
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          SUMMARY: ${{ steps.meta.outputs.summary }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        run: |
+          PRERELEASE_FLAG=()
+          [[ "$PRERELEASE" == "true" ]] && PRERELEASE_FLAG=(--prerelease)
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+            gh release edit "$TAG" --title "xm126-bthome-tank $VERSION" --notes "$SUMMARY" "${PRERELEASE_FLAG[@]}"
+          else
+            gh release create "$TAG" release/* \
+              --title "xm126-bthome-tank $VERSION" \
+              --notes "$SUMMARY" \
+              "${PRERELEASE_FLAG[@]}"
+          fi

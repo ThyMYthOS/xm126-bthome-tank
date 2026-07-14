@@ -17,69 +17,11 @@ jobs:
       - name: Check out this repo
         uses: actions/checkout@v4
 
-      - name: Install apt dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            git cmake ninja-build gperf ccache dfu-util device-tree-compiler wget \
-            python3-dev python3-venv python3-pip python3-setuptools python3-wheel \
-            xz-utils file make gcc gcc-multilib g++-multilib libsdl2-dev libmagic1
-
-      # NCS is a several-GB, ~30-module west workspace, and the Zephyr SDK download is
-      # sizeable too -- caching keyed on the pinned versions above means only the first
-      # run (or a version bump) pays that cost; every other run restores instantly.
-      - name: Cache NCS checkout, Zephyr SDK, and west venv
-        id: cache-toolchain
-        uses: actions/cache@v4
+      - name: Build firmware
+        uses: ./.github/actions/build-firmware
         with:
-          path: |
-            ~/ncs
-            ~/zephyr-sdk
-            ~/ncs-venv
-          key: ncs-${{ env.NCS_VERSION }}-zephyr-sdk-${{ env.ZEPHYR_SDK_VERSION }}-v1
-
-      - name: Set up west in a venv
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          python3 -m venv ~/ncs-venv
-          source ~/ncs-venv/bin/activate
-          pip install -U pip wheel west
-
-      - name: Fetch nRF Connect SDK ${{ env.NCS_VERSION }}
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          source ~/ncs-venv/bin/activate
-          west init -m https://github.com/nrfconnect/sdk-nrf --mr ${{ env.NCS_VERSION }} ~/ncs
-          cd ~/ncs
-          west update
-
-      - name: Install Python requirements
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          source ~/ncs-venv/bin/activate
-          cd ~/ncs
-          pip install -r zephyr/scripts/requirements.txt \
-                      -r nrf/scripts/requirements.txt \
-                      -r bootloader/mcuboot/scripts/requirements.txt
-
-      - name: Install Zephyr SDK (ARM toolchain only)
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          source ~/ncs-venv/bin/activate
-          cd ~/ncs
-          west sdk install -t arm-zephyr-eabi -b ~/zephyr-sdk
-
-      - name: Build app
-        run: |
-          source ~/ncs-venv/bin/activate
-          export ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk/zephyr-sdk-${{ env.ZEPHYR_SDK_VERSION }}
-          export ZEPHYR_NCS_ROOT=~/ncs
-          make app
-
-      - name: Report flash/RAM usage
-        run: |
-          SDK_GCC=~/zephyr-sdk/zephyr-sdk-${{ env.ZEPHYR_SDK_VERSION }}/arm-zephyr-eabi/bin/arm-zephyr-eabi-size
-          "$SDK_GCC" app/out/app/zephyr/xm126_bthome_tank.elf
+          ncs-version: ${{ env.NCS_VERSION }}
+          zephyr-sdk-version: ${{ env.ZEPHYR_SDK_VERSION }}
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
