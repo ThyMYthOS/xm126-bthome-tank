@@ -1,5 +1,10 @@
 # XM126 Tank Volume (BTHome + BLE DFU)
 
+[![Build status](https://github.com/ThyMYthOS/xm126-bthome-tank/actions/workflows/build.yml/badge.svg)](https://github.com/ThyMYthOS/xm126-bthome-tank/actions/workflows/build.yml)
+[![Latest release](https://img.shields.io/github/v/release/ThyMYthOS/xm126-bthome-tank?label=version)](https://github.com/ThyMYthOS/xm126-bthome-tank/releases/latest)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-compatible-41BDF5?logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
+[![BTHome v2](https://img.shields.io/badge/BTHome-v2-006e6e)](https://bthome.io/)
+
 Firmware for the [Acconeer XM126](https://www.acconeer.com) radar module (A121 radar,
 nRF52840) that turns it into a battery-friendly BLE tank-level/volume sensor for [Home
 Assistant](https://www.home-assistant.io/) -- no custom integration or companion app
