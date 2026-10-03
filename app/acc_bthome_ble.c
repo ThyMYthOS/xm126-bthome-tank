@@ -293,3 +293,22 @@ void acc_bthome_ble_init(void)
 
 	printk("BTHome broadcaster started, DFU/config window every %u s for %u s\n", DFU_WINDOW_PERIOD_S, DFU_WINDOW_DURATION_S);
 }
+
+void acc_bthome_ble_stop(void)
+{
+	k_timer_stop(&open_window_timer);
+	k_timer_stop(&close_window_timer);
+
+	/* Safe no-ops if either set wasn't currently advertising. */
+	(void)bt_le_ext_adv_stop(adv_dfu);
+	(void)bt_le_ext_adv_stop(adv_bthome);
+}
+
+void acc_bthome_ble_resume(void)
+{
+	/* Reopens the DFU/config window right away, same as the initial boot sequence in
+	 * acc_bthome_ble_init(); the BTHome set is left alone, it starts again on its own
+	 * with the next acc_bthome_ble_update() call.
+	 */
+	k_timer_start(&open_window_timer, K_NO_WAIT, K_NO_WAIT);
+}
