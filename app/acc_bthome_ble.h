@@ -36,4 +36,20 @@ void acc_bthome_ble_init(void);
 void acc_bthome_ble_update(uint16_t distance_mm, uint32_t volume_milliliters, bool valid, uint8_t battery_percent,
                            uint16_t battery_voltage_mv, int16_t temperature_centi_c);
 
+/**@brief Stop all BLE communication (used for low-battery protection).
+ *
+ * Halts both advertising sets and the periodic DFU/config window timer. Does not
+ * disable the Bluetooth stack itself, and does not forcibly tear down an
+ * already-established connection (e.g. an in-progress DFU upload) -- only new
+ * advertising activity is stopped. Pair with acc_bthome_ble_resume() to restart later.
+ */
+void acc_bthome_ble_stop(void);
+
+/**@brief Resume BLE communication after acc_bthome_ble_stop().
+ *
+ * Re-arms the periodic DFU/config window; the BTHome broadcaster resumes on its own
+ * with the next acc_bthome_ble_update() call.
+ */
+void acc_bthome_ble_resume(void);
+
 #endif

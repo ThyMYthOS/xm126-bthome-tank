@@ -54,6 +54,18 @@
  */
 #define BROADCAST_HEARTBEAT_MS (15U * 60U * 1000U) /* 15 min */
 
+/* Hard LiPo over-discharge cutoff (below lipo_1s_curve's own 0% point further down --
+ * this is meant to catch a cell that's already past "empty", not to define "empty").
+ * At or below this, the firmware stops the radar and all BLE communication and only
+ * wakes every LOW_BATTERY_RECHECK_PERIOD_MS to re-sample the battery, to protect the
+ * cell from further damage while off its charger. LOW_BATTERY_RESUME_V sits a bit above
+ * the cutoff so a reading that sags right at the line under load doesn't flap in and
+ * out of protection every recheck.
+ */
+#define LOW_BATTERY_CUTOFF_V          (3.0f)
+#define LOW_BATTERY_RESUME_V          (3.1f)
+#define LOW_BATTERY_RECHECK_PERIOD_MS (10U * 60U * 1000U) /* 10 min */
+
 /* Not a libc/newlib-nano guarantee, so a local constant is used instead of M_PI. */
 #define TANK_VOLUME_PI 3.14159265358979323846f
 
@@ -240,6 +252,8 @@ static bool volume_broadcast_needed(bool valid, uint32_t volume_ml);
 
 static uint8_t battery_voltage_to_percent(float voltage);
 
+static bool enter_low_battery_protection(app_context_t *context, acc_cal_result_t *cal_result);
+
 static bool initialize_application_resources(app_context_t *context);
 
 static bool sensor_calibration(acc_sensor_t *sensor, acc_cal_result_t *cal_result, void *buffer, uint32_t buffer_size);
@@ -413,7 +427,9 @@ int main(int argc, char *argv[])
 			float    mcu_temperature_c    = 0.0f;
 			int16_t  temperature_centi_c  = 0;
 
-			if (acc_battery_info_sample_voltage(&battery_voltage_v, false))
+			bool battery_sampled = acc_battery_info_sample_voltage(&battery_voltage_v, false);
+
+			if (battery_sampled)
 			{
 				battery_voltage_mv = (uint16_t)(battery_voltage_v * 1000.0f);
 				battery_percent    = battery_voltage_to_percent(battery_voltage_v);
@@ -421,6 +437,21 @@ int main(int argc, char *argv[])
 			else
 			{
 				printf("Failed to sample battery voltage\n");
+			}
+
+			if (battery_sampled && (battery_voltage_v <= LOW_BATTERY_CUTOFF_V))
+			{
+				printf("Battery at %" PRIfloat " V <= %" PRIfloat " V cutoff, entering low-battery protection\n",
+				       ACC_LOG_FLOAT_TO_INTEGER(battery_voltage_v), ACC_LOG_FLOAT_TO_INTEGER((float)LOW_BATTERY_CUTOFF_V));
+
+				if (!enter_low_battery_protection(&context, &cal_result))
+				{
+					printf("Recalibration after low-battery protection failed\n");
+					cleanup(&context);
+					return EXIT_FAILURE;
+				}
+
+				continue;
 			}
 
 			if (acc_mcu_temperature_read_die_temp(&mcu_temperature_c))
@@ -1046,4 +1077,47 @@ static uint8_t battery_voltage_to_percent(float voltage)
 	}
 
 	return 0U; /* unreachable: bounds already checked above */
+}
+
+/* Entered once the battery hits LOW_BATTERY_CUTOFF_V. Stops BLE communication and powers
+ * the radar sensor fully off, then blocks here -- waking only every
+ * LOW_BATTERY_RECHECK_PERIOD_MS to re-sample the battery via the P0.29-gated divider
+ * (acc_battery_info.c), which costs only a few hundred microseconds of power itself --
+ * until the voltage recovers past LOW_BATTERY_RESUME_V. The sensor is then recalibrated
+ * from scratch (its supply was fully removed, equivalent to a power-on reset of the
+ * radar IC) before returning. Does not forcibly disconnect an already-established BLE
+ * connection (e.g. an in-progress DFU upload) -- see acc_bthome_ble_stop().
+ *
+ * Returns false only if recalibration itself fails after the battery has recovered, in
+ * which case the caller aborts the same way an initial boot-time calibration failure
+ * does.
+ */
+static bool enter_low_battery_protection(app_context_t *context, acc_cal_result_t *cal_result)
+{
+	acc_bthome_ble_stop();
+
+	acc_hal_integration_sensor_disable(SENSOR_ID);
+	acc_hal_integration_sensor_supply_off(SENSOR_ID);
+
+	float voltage = 0.0f;
+
+	do
+	{
+		k_sleep(K_MSEC(LOW_BATTERY_RECHECK_PERIOD_MS));
+	} while (!acc_battery_info_sample_voltage(&voltage, false) || (voltage < LOW_BATTERY_RESUME_V));
+
+	printf("Battery recovered to %" PRIfloat " V, resuming normal operation\n", ACC_LOG_FLOAT_TO_INTEGER(voltage));
+
+	acc_hal_integration_sensor_supply_on(SENSOR_ID);
+	acc_hal_integration_sensor_enable(SENSOR_ID);
+
+	if (!sensor_calibration(context->sensor, cal_result, context->buffer, context->buffer_size) ||
+	    !full_detector_calibration(context, cal_result))
+	{
+		return false;
+	}
+
+	acc_bthome_ble_resume();
+
+	return true;
 }
